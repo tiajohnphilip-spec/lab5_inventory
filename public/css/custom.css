@@ -1,0 +1,28 @@
+body {
+    background-color: #f4f6f9;
+}
+
+.navbar {
+    background-color: #212529 !important;
+}
+
+.navbar-brand {
+    font-weight: bold;
+}
+
+.card {
+    border-radius: 12px;
+}
+
+.btn {
+    border-radius: 6px;
+}
+
+.table {
+    background-color: white;
+}
+
+h2,
+h4 {
+    font-weight: 600;
+}
