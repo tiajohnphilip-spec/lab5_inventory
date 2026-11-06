@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use App\Models\Product;
@@ -38,9 +37,78 @@ class ProductController extends Controller
             ->with('success', 'Product added successfully.');
     }
 
-    public function show(Product $product)
+    public function show(Request $request, Product $product)
     {
-        return view('products.show', compact('product'));
+        $validated = $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+        ]);
+
+        // Get all transactions in chronological order
+        $allTransactions = $product->transactions()
+            ->with('user')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        // Calculate total stock movement
+        $netMovement = $allTransactions->sum(function ($transaction) {
+            if ($transaction->type === 'stock_in') {
+                return $transaction->quantity;
+            }
+
+            if ($transaction->type === 'stock_out') {
+                return -$transaction->quantity;
+            }
+
+            if ($transaction->type === 'adjustment') {
+                return $transaction->quantity;
+            }
+
+            return 0;
+        });
+
+        // Calculate opening balance
+        $runningBalance = (int) $product->quantity - $netMovement;
+
+        // Calculate running balance for each transaction
+        foreach ($allTransactions as $transaction) {
+
+            if ($transaction->type === 'stock_in') {
+                $runningBalance += $transaction->quantity;
+            } elseif ($transaction->type === 'stock_out') {
+                $runningBalance -= $transaction->quantity;
+            } elseif ($transaction->type === 'adjustment') {
+                $runningBalance += $transaction->quantity;
+            }
+
+            $transaction->running_balance = $runningBalance;
+        }
+
+        // Apply date filters after calculating balances
+        $transactions = $allTransactions->filter(function ($transaction) use ($validated) {
+
+            if (
+                !empty($validated['start_date']) &&
+                $transaction->created_at->toDateString() < $validated['start_date']
+            ) {
+                return false;
+            }
+
+            if (
+                !empty($validated['end_date']) &&
+                $transaction->created_at->toDateString() > $validated['end_date']
+            ) {
+                return false;
+            }
+
+            return true;
+        })->reverse()->values();
+
+        return view('products.show', compact(
+            'product',
+            'transactions'
+        ));
     }
 
     public function edit(Product $product)
